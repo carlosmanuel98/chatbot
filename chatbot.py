@@ -3,22 +3,22 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 from langchain.chains import ConversationChain  # Cambié ConversationalChain a ConversationChain
-from langchain.llms import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains.question_answering import load_qa_chain
-from langchain.chat_models import ChatOpenAI
 from huggingface_hub import hf_hub_download
 import faiss
-import openai
-
+from groq import Groq  # Importamos la librería de GROQ
 # Cargar variables de entorno
 load_dotenv()
 
 # Establecer clave de API para GROQ
 groq_api_key = os.getenv("GROQ_API_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = Groq(
+    api_key=os.getenv("GROQ_API_KEY"),  # Usamos la variable de entorno para la clave de API
+)
+
 
 def leer_saldo_cliente(id_cliente):
     # Leer el archivo CSV
@@ -48,24 +48,28 @@ def cargar_base_conocimientos():
     return nueva_cuenta, tarjeta_credito
 
 # Función para obtener la respuesta usando el modelo de GROQ
-openai.api_base = "https://api.groq.com/openai/v1/models"  # URL base correcta de GROQ
-
 def obtener_respuesta_groq(pregunta, fuente):
     try:
-        # Hacer la solicitud a la API de GROQ utilizando el cliente compatible con OpenAI
-        response = openai.Completion.create(
-            model="mixtral-8x7b-32768",  # Nombre del modelo
-            prompt=pregunta,
-            max_tokens=150
+        # Realizamos la solicitud para completar el chat usando el modelo de GROQ
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": pregunta,  # Usamos la pregunta que el usuario hace
+                }
+            ],
+            model="llama-3.3-70b-versatile",  # Modelo específico que deseas usar
         )
-        
-        # Obtener la respuesta generada
-        respuesta = response.choices[0].text.strip() if response.choices else "No se pudo obtener una respuesta."
-        
-        return respuesta
-    except openai.error.OpenAIError as e:
-        # Capturamos cualquier error relacionado con OpenAI/GROQ
-        return f"Error al conectar con la API de GROQ: {e}"
+
+        # Retornamos la respuesta del modelo
+        return chat_completion.choices[0].message.content
+
+    except Exception as e:
+        return f"Error al conectar con la API de GROQ: {str(e)}"
+
+# Ejemplo de uso
+respuesta = obtener_respuesta_groq("Explain the importance of fast language models", fuente="general")
+print(f"Respuesta de GROQ: {respuesta}")
 
 # Función para obtener el proceso bancario relacionado con la pregunta
 def obtener_proceso_bancario(pregunta, nueva_cuenta, tarjeta_credito):
@@ -107,7 +111,7 @@ if __name__ == "__main__":
 
     print("Bienvenido al ChatGroq, ¿cómo puedo ayudarte hoy?")
     while True:
-        pregunta = input("Tú: ")
+        pregunta = input("\nTú: ")
         if pregunta.lower() == "salir":
             print("¡Hasta luego!")
             break
